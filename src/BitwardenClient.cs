@@ -1,4 +1,5 @@
 ﻿using AuthCenter.Models;
+using AuthCenter_Bitwarden_Client.Models;
 using Microsoft.VisualBasic.FileIO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -9,6 +10,9 @@ namespace AuthCenter;
 
 public class BitwardenClient : IDisposable
 {
+    private static readonly bool isWindowsOs = Environment.OSVersion.Platform == PlatformID.Win32NT;
+    private static readonly char quotationMark = isWindowsOs ? '"' : '\'';
+
     private string m_session = "";
 
     public BitwardenClient(string url, string userName, string password)
@@ -47,7 +51,7 @@ public class BitwardenClient : IDisposable
 
         var otpMethod = (otp > -1) ? $"--method 0 --code {otp}" : "";
         var result = IssueBitWardenCommand($"login {userName} {password} --raw {otpMethod}");
-        result = result.Replace("\r\n", string.Empty);
+        result = result.Replace(Environment.NewLine, string.Empty);
 
         if (!result.StartsWith("You are already"))
         {
@@ -78,18 +82,19 @@ public class BitwardenClient : IDisposable
             output = IssueBitWardenCommand(cmd);
         }
 
+        output = output.Replace(Environment.NewLine, string.Empty);
 
         return output;
     }
 
     private string GetBWBinaryFilePath()
     {
-        var fileBW = (Environment.OSVersion.Platform.ToString().StartsWith("Win")) ? "bw.exe" : "bw";
-        var filePath = Path.Combine(GetAppLocation(), fileBW);
+        var fileBW = isWindowsOs ? "bw.exe" : "bw";
+        var filePath = Path.Combine(Environment.GetEnvironmentVariable("BW_CLI_PATH") ?? GetAppLocation(), fileBW);
 
         if (!File.Exists(filePath))
             throw new Exception($"{fileBW} not found in current directory. Before start, please download the last version of Bitwarden CLI (BW) from https://bitwarden.com/help/cli/");
-        return fileBW;
+        return filePath;
     }
 
 
@@ -111,7 +116,7 @@ public class BitwardenClient : IDisposable
 
     public List<Item> ListItems()
     {
-        var cmd = $"list items --session \"{m_session}\"";
+        var cmd = $"list items --session {quotationMark}{m_session}{quotationMark}";
 
         var json = IssueBitWardenCommand(cmd);
 
@@ -135,7 +140,7 @@ public class BitwardenClient : IDisposable
         if (!string.IsNullOrEmpty(collectionId))
             cmd.Append($" --collectionid  {collectionId}");
 
-        cmd.Append($" --session \"{m_session}\"");
+        cmd.Append($" --session {quotationMark}{m_session}{quotationMark}");
 
         var json = IssueBitWardenCommand(cmd.ToString());
 
@@ -147,10 +152,10 @@ public class BitwardenClient : IDisposable
 
     public List<Item> ListItems(string searchPattern)
     {
-        var cmd = $"list items --session \"{m_session}\"";
+        var cmd = $"list items --session {quotationMark}{m_session}{quotationMark}";
 
         if (!string.IsNullOrEmpty(searchPattern))
-            cmd = $"list items --search \"{searchPattern}\" --session \"{m_session}\"";
+            cmd = $"list items --search {quotationMark}{searchPattern}{quotationMark} --session {quotationMark}{m_session}{quotationMark}";
 
         var json = IssueBitWardenCommand(cmd);
 
@@ -162,7 +167,7 @@ public class BitwardenClient : IDisposable
 
     public List<Organisation> ListOrganisations()
     {
-        var json = IssueBitWardenCommand($"list organizations --session \"{m_session}\"");
+        var json = IssueBitWardenCommand($"list organizations --session {quotationMark}{m_session}{quotationMark}");
 
         var itemList = JsonConvert.DeserializeObject<List<Organisation>>(json);
 
@@ -172,7 +177,7 @@ public class BitwardenClient : IDisposable
 
     public List<Collection> ListCollections()
     {
-        var json = IssueBitWardenCommand($"list collections --session \"{m_session}\"");
+        var json = IssueBitWardenCommand($"list collections --session {quotationMark}{m_session}{quotationMark}");
 
         var itemList = JsonConvert.DeserializeObject<List<Collection>>(json);
 
@@ -182,10 +187,10 @@ public class BitwardenClient : IDisposable
 
     public void DeleteItem(string itemGuid, string orgId = "")
     {
-        var cmd = $"delete item {itemGuid} --session \"{m_session}\"";
+        var cmd = $"delete item {itemGuid} --session {quotationMark}{m_session}{quotationMark}";
 
         if (!string.IsNullOrEmpty(orgId))
-            cmd = $"delete item {itemGuid} --organizationid {orgId} --session \"{m_session}\"";
+            cmd = $"delete item {itemGuid} --organizationid {orgId} --session {quotationMark}{m_session}{quotationMark}";
 
         var result = IssueBitWardenCommand(cmd);
     }
@@ -220,7 +225,7 @@ public class BitwardenClient : IDisposable
 
         var encodedJson = Base64Encode(json);
 
-        var cmd2 = $"echo {encodedJson} | \"{GetAppLocation()}\\bw.exe\" create item  --session \"{m_session}\"";
+        var cmd2 = $"echo {encodedJson} | {quotationMark}{GetBWBinaryFilePath()}{quotationMark} create item  --session {quotationMark}{m_session}{quotationMark}";
 
         var newItemJson = IssueCmdCommand(cmd2);
 
@@ -246,7 +251,7 @@ public class BitwardenClient : IDisposable
         var json = JsonConvert.SerializeObject(item);
         var encodedJson = Base64Encode(json);
 
-        var cmd2 = $"echo {encodedJson} | \"{GetAppLocation()}\\bw.exe\" create item  --session \"{m_session}\"";
+        var cmd2 = $"echo {encodedJson} | {quotationMark}{GetBWBinaryFilePath()}{quotationMark} create item  --session {quotationMark}{m_session}{quotationMark}";
 
         var newItemJson = IssueCmdCommand(cmd2);
 
@@ -264,7 +269,7 @@ public class BitwardenClient : IDisposable
         // by default assume successful retrieval of item from vault
         var vaultItem = (result: true, msg: "Success", item: item);
 
-        var cmd = $"get item {id_or_name} --session \"{m_session}\"";
+        var cmd = $"get item {id_or_name} --session {quotationMark}{m_session}{quotationMark}";
 
         var json = IssueBitWardenCommand(cmd);
 
@@ -291,7 +296,7 @@ public class BitwardenClient : IDisposable
 
         var encodedJson = Base64Encode(json);
 
-        var cmd = $"echo {encodedJson} | \"{GetAppLocation()}\\bw.exe\" edit item {editedItem.id} --session \"{m_session}\"";
+        var cmd = $"echo {encodedJson} | {quotationMark}{GetBWBinaryFilePath()}{quotationMark} edit item {editedItem.id} --session {quotationMark}{m_session}{quotationMark}";
 
         var result = IssueCmdCommand(cmd);
 
@@ -303,17 +308,17 @@ public class BitwardenClient : IDisposable
 
     public void CreateAttachment(string itemGuid, string filePath)
     {
-        var cmd = $"create attachment --file \"{filePath}\" --itemid {itemGuid} --session \"{m_session}\"";
+        var cmd = $"create attachment --file {quotationMark}{filePath}{quotationMark} --itemid {itemGuid} --session {quotationMark}{m_session}{quotationMark}";
 
         var json = IssueBitWardenCommand(cmd);
     }
 
     public string DownloadAttachment(string itemGuid, string attachementName, string outputPath = "")
     {
-        var cmd = $"get attachment \"{attachementName}\" --itemid {itemGuid} --session \"{m_session}\"";
+        var cmd = $"get attachment {quotationMark}{attachementName}{quotationMark} --itemid {itemGuid} --session {quotationMark}{m_session}{quotationMark}";
 
         if (!string.IsNullOrEmpty(outputPath))
-            cmd = $"get attachment \"{attachementName}\" --itemid {itemGuid} --output \"{outputPath}\" --session \"{m_session}\"";
+            cmd = $"get attachment {quotationMark}{attachementName}{quotationMark} --itemid {itemGuid} --output {quotationMark}{outputPath}{quotationMark} --session {quotationMark}{m_session}{quotationMark}";
 
         var result = IssueBitWardenCommand(cmd);
 
@@ -322,10 +327,10 @@ public class BitwardenClient : IDisposable
 
     public void DeleteAttachment(string itemGuid, string attachmentId, string orgId = "")
     {
-        var cmd = $"delete attachment {attachmentId} --itemid {itemGuid} --session \"{m_session}\"";
+        var cmd = $"delete attachment {attachmentId} --itemid {itemGuid} --session {quotationMark}{m_session}{quotationMark}";
 
         if (!string.IsNullOrEmpty(orgId))
-            cmd = $"delete attachment {attachmentId} --itemid {itemGuid} --organizationid {orgId} --session \"{m_session}\"";
+            cmd = $"delete attachment {attachmentId} --itemid {itemGuid} --organizationid {orgId} --session {quotationMark}{m_session}{quotationMark}";
 
         var result = IssueBitWardenCommand(cmd);
     }
@@ -378,8 +383,15 @@ public class BitwardenClient : IDisposable
         var error = new StringBuilder();
 
         var p = new Process();
-        p.StartInfo.FileName = "cmd.exe";
-        p.StartInfo.Arguments = $"/c {cmd}";
+        if(isWindowsOs)
+        {
+            p.StartInfo.FileName = "cmd.exe";
+            p.StartInfo.Arguments = $"/c {cmd}";
+        } else
+        {
+            p.StartInfo.FileName = "/bin/bash";
+            p.StartInfo.Arguments = $"-c \"{cmd}\"";
+        }
         p.StartInfo.UseShellExecute = false;
         p.StartInfo.CreateNoWindow = true;
         p.StartInfo.ErrorDialog = false;
