@@ -366,7 +366,10 @@ public class BitwardenClient : IDisposable
         p.WaitForExit();
 
         var errorResponse = error.ToString();
-        if (!string.IsNullOrWhiteSpace(errorResponse) && errorResponse.Contains("You are already logged") == false)
+        if (!string.IsNullOrWhiteSpace(errorResponse)
+            && errorResponse.Contains("You are already logged") == false
+            && errorResponse.Contains("Setting the NODE_TLS_REJECT_UNAUTHORIZED") == false
+            )
         {
             throw new Exception(errorResponse);
         }
